@@ -44924,6 +44924,7 @@ const path_1 = __importDefault(__nccwpck_require__(1017));
 const axios_1 = __importDefault(__nccwpck_require__(8757));
 const core = __importStar(__nccwpck_require__(2186));
 const logger = __importStar(__nccwpck_require__(4636));
+const svgGen = __importStar(__nccwpck_require__(5743));
 const STAT_SERVER_PORT = 7777;
 const BLACK = '#000000';
 const WHITE = '#FFFFFF';
@@ -45196,60 +45197,57 @@ function getDiskSizeStats() {
 }
 function getLineGraph(options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const payload = {
-            options: {
-                width: 1000,
-                height: 500,
-                xAxis: {
-                    label: 'Time'
-                },
-                yAxis: {
-                    label: options.label
-                },
-                timeTicks: {
-                    unit: 'auto'
-                }
-            },
-            lines: [options.line]
+        const points = options.line.points;
+        if (points.length === 0) {
+            return { id: 'empty-line-graph', url: '' };
+        }
+        const dimensions = svgGen.getChartDimensions(1000, 500, 40);
+        const dataRange = svgGen.calculateDataRange(points);
+        const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions);
+        const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth);
+        const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight);
+        const pathData = svgGen.generateLinePath(points, scaleFunctions);
+        const chartContent = `
+    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
+    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
+    <path d="${pathData}" fill="none" stroke="${options.line.color}" stroke-width="2"/>
+    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
+    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
+    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`;
+        const svg = svgGen.createSVGDocument(dimensions, options.label, options.axisColor, chartContent);
+        const dataUrl = svgGen.svgToDataUrl(svg);
+        return {
+            id: `line-graph-${options.line.label.replace(/\s/g, '-').toLowerCase()}`,
+            url: dataUrl
         };
-        let response = null;
-        try {
-            response = yield axios_1.default.put('https://api.globadge.com/v1/chartgen/line/time', payload);
-        }
-        catch (error) {
-            logger.error(error);
-            logger.error(`getLineGraph ${JSON.stringify(payload)}`);
-        }
-        return response === null || response === void 0 ? void 0 : response.data;
     });
 }
 function getStackedAreaGraph(options) {
     return __awaiter(this, void 0, void 0, function* () {
-        const payload = {
-            options: {
-                width: 1000,
-                height: 500,
-                xAxis: {
-                    label: 'Time'
-                },
-                yAxis: {
-                    label: options.label
-                },
-                timeTicks: {
-                    unit: 'auto'
-                }
-            },
-            areas: options.areas
+        const areas = options.areas;
+        if (areas.length === 0 || areas[0].points.length === 0) {
+            return { id: 'empty-stacked-area-graph', url: '' };
+        }
+        const dimensions = svgGen.getChartDimensions(1000, 500, 60);
+        const dataRange = svgGen.calculateStackedDataRange(areas);
+        const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions);
+        const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth);
+        const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight);
+        const areaPaths = svgGen.generateStackedAreaPaths(areas, scaleFunctions);
+        const legend = svgGen.generateLegend(areas, dimensions.width, options.axisColor);
+        const chartContent = `
+    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
+    ${areaPaths.join('\n    ')}
+    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
+    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
+    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
+    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`;
+        const svg = svgGen.createSVGDocument(dimensions, options.label, options.axisColor, chartContent, `\n  ${legend}`);
+        const dataUrl = svgGen.svgToDataUrl(svg);
+        return {
+            id: `stacked-area-graph-${options.label.replace(/\s/g, '-').toLowerCase()}`,
+            url: dataUrl
         };
-        let response = null;
-        try {
-            response = yield axios_1.default.put('https://api.globadge.com/v1/chartgen/stacked-area/time', payload);
-        }
-        catch (error) {
-            logger.error(error);
-            logger.error(`getStackedAreaGraph ${JSON.stringify(payload)}`);
-        }
-        return response === null || response === void 0 ? void 0 : response.data;
     });
 }
 ///////////////////////////
@@ -45460,6 +45458,256 @@ function report(currentJob) {
     });
 }
 exports.report = report;
+
+
+/***/ }),
+
+/***/ 5743:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.svgToDataUrl = exports.createSVGDocument = exports.generateLegend = exports.generateStackedAreaPaths = exports.generateLinePath = exports.generateAxisLabels = exports.generateYAxisTicksAndLabels = exports.generateXAxisTicksAndLabels = exports.generateAxes = exports.generateGridLines = exports.generateYAxisTicks = exports.generateTimeTicks = exports.createScaleFunctions = exports.calculateStackedDataRange = exports.calculateDataRange = exports.getChartDimensions = void 0;
+/**
+ * Get chart dimensions with default padding
+ */
+function getChartDimensions(width = 1000, height = 500, topPadding = 40) {
+    const padding = { top: topPadding, right: 40, bottom: 60, left: 80 };
+    return {
+        width,
+        height,
+        padding,
+        chartWidth: width - padding.left - padding.right,
+        chartHeight: height - padding.top - padding.bottom
+    };
+}
+exports.getChartDimensions = getChartDimensions;
+/**
+ * Calculate data range from points
+ */
+function calculateDataRange(points, paddingPercent = 0.1) {
+    const xValues = points.map(p => new Date(p.x).getTime());
+    const yValues = points.map(p => p.y);
+    return {
+        xMin: Math.min(...xValues),
+        xMax: Math.max(...xValues),
+        yMin: 0,
+        yMax: Math.max(...yValues) * (1 + paddingPercent)
+    };
+}
+exports.calculateDataRange = calculateDataRange;
+/**
+ * Calculate data range for stacked areas
+ */
+function calculateStackedDataRange(areas, paddingPercent = 0.1) {
+    const points = areas[0].points;
+    const xValues = points.map(p => new Date(p.x).getTime());
+    let yMax = 0;
+    for (let i = 0; i < points.length; i++) {
+        let stackedValue = 0;
+        for (const area of areas) {
+            stackedValue += area.points[i].y;
+        }
+        yMax = Math.max(yMax, stackedValue);
+    }
+    return {
+        xMin: Math.min(...xValues),
+        xMax: Math.max(...xValues),
+        yMin: 0,
+        yMax: yMax * (1 + paddingPercent)
+    };
+}
+exports.calculateStackedDataRange = calculateStackedDataRange;
+/**
+ * Create scale functions for mapping data to pixel coordinates
+ */
+function createScaleFunctions(dataRange, dimensions) {
+    const { xMin, xMax, yMin, yMax } = dataRange;
+    const { chartWidth, chartHeight } = dimensions;
+    return {
+        scaleX: (x) => ((x - xMin) / (xMax - xMin)) * chartWidth,
+        scaleY: (y) => chartHeight - ((y - yMin) / (yMax - yMin)) * chartHeight
+    };
+}
+exports.createScaleFunctions = createScaleFunctions;
+/**
+ * Generate time axis ticks
+ */
+function generateTimeTicks(dataRange, chartWidth, numTicks = 5) {
+    const { xMin, xMax } = dataRange;
+    const ticks = [];
+    for (let i = 0; i <= numTicks; i++) {
+        const tickTime = xMin + (i * (xMax - xMin)) / numTicks;
+        const tickX = (i * chartWidth) / numTicks;
+        const date = new Date(tickTime);
+        const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        ticks.push({ x: tickX, label: timeStr });
+    }
+    return ticks;
+}
+exports.generateTimeTicks = generateTimeTicks;
+/**
+ * Generate Y-axis ticks
+ */
+function generateYAxisTicks(dataRange, chartHeight, numTicks = 5) {
+    const { yMin, yMax } = dataRange;
+    const ticks = [];
+    for (let i = 0; i <= numTicks; i++) {
+        const tickValue = yMin + (i * (yMax - yMin)) / numTicks;
+        const tickY = chartHeight - (i * chartHeight) / numTicks;
+        ticks.push({ y: tickY, label: tickValue.toFixed(1) });
+    }
+    return ticks;
+}
+exports.generateYAxisTicks = generateYAxisTicks;
+/**
+ * Generate grid lines SVG
+ */
+function generateGridLines(yTicks, chartWidth) {
+    return yTicks
+        .map(tick => `<line x1="0" y1="${tick.y}" x2="${chartWidth}" y2="${tick.y}" stroke="#e0e0e0" stroke-width="1"/>`)
+        .join('\n    ');
+}
+exports.generateGridLines = generateGridLines;
+/**
+ * Generate axes SVG
+ */
+function generateAxes(chartWidth, chartHeight, axisColor) {
+    return `<line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="${axisColor}" stroke-width="2"/>
+    <line x1="0" y1="0" x2="0" y2="${chartHeight}" stroke="${axisColor}" stroke-width="2"/>`;
+}
+exports.generateAxes = generateAxes;
+/**
+ * Generate X-axis ticks and labels SVG
+ */
+function generateXAxisTicksAndLabels(timeTicks, chartHeight, axisColor) {
+    return timeTicks
+        .map(tick => `
+    <line x1="${tick.x}" y1="${chartHeight}" x2="${tick.x}" y2="${chartHeight + 5}" stroke="${axisColor}" stroke-width="1"/>
+    <text x="${tick.x}" y="${chartHeight + 20}" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="${axisColor}">${tick.label}</text>
+    `)
+        .join('');
+}
+exports.generateXAxisTicksAndLabels = generateXAxisTicksAndLabels;
+/**
+ * Generate Y-axis ticks and labels SVG
+ */
+function generateYAxisTicksAndLabels(yTicks, axisColor) {
+    return yTicks
+        .map(tick => {
+        var _a, _b, _c;
+        return `
+    <line x1="-5" y1="${(_a = tick.y) !== null && _a !== void 0 ? _a : 0}" x2="0" y2="${(_b = tick.y) !== null && _b !== void 0 ? _b : 0}" stroke="${axisColor}" stroke-width="1"/>
+    <text x="-10" y="${((_c = tick.y) !== null && _c !== void 0 ? _c : 0) + 4}" text-anchor="end" font-family="Arial, sans-serif" font-size="12" fill="${axisColor}">${tick.label}</text>
+    `;
+    })
+        .join('');
+}
+exports.generateYAxisTicksAndLabels = generateYAxisTicksAndLabels;
+/**
+ * Generate axis labels SVG
+ */
+function generateAxisLabels(chartWidth, chartHeight, axisColor) {
+    return `<!-- X-axis label -->
+    <text x="${chartWidth / 2}" y="${chartHeight + 45}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${axisColor}">Time</text>
+    
+    <!-- Y-axis label -->
+    <text x="${-chartHeight / 2}" y="-50" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${axisColor}" transform="rotate(-90)">value</text>`;
+}
+exports.generateAxisLabels = generateAxisLabels;
+/**
+ * Generate line graph path
+ */
+function generateLinePath(points, scaleFunctions) {
+    return points
+        .map((p, i) => {
+        const x = scaleFunctions.scaleX(new Date(p.x).getTime());
+        const y = scaleFunctions.scaleY(p.y);
+        return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
+    })
+        .join(' ');
+}
+exports.generateLinePath = generateLinePath;
+/**
+ * Generate stacked area paths
+ */
+function generateStackedAreaPaths(areas, scaleFunctions) {
+    const areaPaths = [];
+    const points = areas[0].points;
+    let previousYValues = new Array(points.length).fill(0);
+    for (const area of areas) {
+        const pathPoints = [];
+        // Top edge
+        for (let i = 0; i < area.points.length; i++) {
+            const x = scaleFunctions.scaleX(new Date(area.points[i].x).getTime());
+            const y = scaleFunctions.scaleY(previousYValues[i] + area.points[i].y);
+            pathPoints.push({ x, y });
+        }
+        // Bottom edge (reversed)
+        for (let i = area.points.length - 1; i >= 0; i--) {
+            const x = scaleFunctions.scaleX(new Date(area.points[i].x).getTime());
+            const y = scaleFunctions.scaleY(previousYValues[i]);
+            pathPoints.push({ x, y });
+        }
+        const pathData = pathPoints
+            .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`)
+            .join(' ') + ' Z';
+        areaPaths.push(`<path d="${pathData}" fill="${area.color}" stroke="none"/>`);
+        // Update previous values for stacking
+        for (let i = 0; i < area.points.length; i++) {
+            previousYValues[i] += area.points[i].y;
+        }
+    }
+    return areaPaths;
+}
+exports.generateStackedAreaPaths = generateStackedAreaPaths;
+/**
+ * Generate legend for stacked area graph
+ */
+function generateLegend(areas, width, axisColor) {
+    const legendItemWidth = 120;
+    const legendStartX = (width - areas.length * legendItemWidth) / 2;
+    return areas
+        .map((area, i) => {
+        const x = legendStartX + i * legendItemWidth;
+        return `
+    <rect x="${x}" y="15" width="15" height="15" fill="${area.color}"/>
+    <text x="${x + 20}" y="27" font-family="Arial, sans-serif" font-size="12" fill="${axisColor}">${area.label}</text>
+    `;
+    })
+        .join('');
+}
+exports.generateLegend = generateLegend;
+/**
+ * Create complete SVG document
+ */
+function createSVGDocument(dimensions, title, axisColor, chartContent, headerContent = '') {
+    const { width, height, padding } = dimensions;
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+  <rect width="${width}" height="${height}" fill="white"/>
+  
+  ${headerContent}
+  
+  <!-- Title -->
+  <text x="${width / 2}" y="${padding.top > 50 ? 48 : 25}" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="${axisColor}">${title}</text>
+  
+  <!-- Chart area -->
+  <g transform="translate(${padding.left},${padding.top})">
+    ${chartContent}
+  </g>
+</svg>`;
+}
+exports.createSVGDocument = createSVGDocument;
+/**
+ * Convert SVG string to base64 data URL
+ */
+function svgToDataUrl(svg) {
+    const base64Svg = Buffer.from(svg).toString('base64');
+    return `data:image/svg+xml;base64,${base64Svg}`;
+}
+exports.svgToDataUrl = svgToDataUrl;
 
 
 /***/ }),

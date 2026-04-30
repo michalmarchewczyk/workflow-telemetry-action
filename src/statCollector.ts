@@ -20,7 +20,7 @@ import {
   WorkflowJobType
 } from './interfaces'
 import * as logger from './logger'
-import { log } from 'console'
+import * as svgGen from './svgGraphGenerator'
 
 const STAT_SERVER_PORT = 7777
 
@@ -356,68 +356,86 @@ async function getDiskSizeStats(): Promise<ProcessedDiskSizeStats> {
 }
 
 async function getLineGraph(options: LineGraphOptions): Promise<GraphResponse> {
-  const payload = {
-    options: {
-      width: 1000,
-      height: 500,
-      xAxis: {
-        label: 'Time'
-      },
-      yAxis: {
-        label: options.label
-      },
-      timeTicks: {
-        unit: 'auto'
-      }
-    },
-    lines: [options.line]
+  const points = options.line.points
+  if (points.length === 0) {
+    return { id: 'empty-line-graph', url: '' }
   }
 
-  let response = null
-  try {
-    response = await axios.put(
-      'https://api.globadge.com/v1/chartgen/line/time',
-      payload
-    )
-  } catch (error: any) {
-    logger.error(error)
-    logger.error(`getLineGraph ${JSON.stringify(payload)}`)
-  }
+  const dimensions = svgGen.getChartDimensions(1000, 500, 40)
+  const dataRange = svgGen.calculateDataRange(points)
+  const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions)
 
-  return response?.data
+  const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth)
+  const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight)
+
+  const pathData = svgGen.generateLinePath(points, scaleFunctions)
+
+  const chartContent = `
+    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
+    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
+    <path d="${pathData}" fill="none" stroke="${options.line.color}" stroke-width="2"/>
+    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
+    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
+    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`
+
+  const svg = svgGen.createSVGDocument(
+    dimensions,
+    options.label,
+    options.axisColor,
+    chartContent
+  )
+  const dataUrl = svgGen.svgToDataUrl(svg)
+
+  return {
+    id: `line-graph-${options.line.label.replace(/\s/g, '-').toLowerCase()}`,
+    url: dataUrl
+  }
 }
 
 async function getStackedAreaGraph(
   options: StackedAreaGraphOptions
 ): Promise<GraphResponse> {
-  const payload = {
-    options: {
-      width: 1000,
-      height: 500,
-      xAxis: {
-        label: 'Time'
-      },
-      yAxis: {
-        label: options.label
-      },
-      timeTicks: {
-        unit: 'auto'
-      }
-    },
-    areas: options.areas
+  const areas = options.areas
+  if (areas.length === 0 || areas[0].points.length === 0) {
+    return { id: 'empty-stacked-area-graph', url: '' }
   }
 
-  let response = null
-  try {
-    response = await axios.put(
-      'https://api.globadge.com/v1/chartgen/stacked-area/time',
-      payload
-    )
-  } catch (error: any) {
-    logger.error(error)
-    logger.error(`getStackedAreaGraph ${JSON.stringify(payload)}`)
+  const dimensions = svgGen.getChartDimensions(1000, 500, 60)
+  const dataRange = svgGen.calculateStackedDataRange(areas)
+  const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions)
+
+  const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth)
+  const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight)
+
+  const areaPaths = svgGen.generateStackedAreaPaths(areas, scaleFunctions)
+
+  const legend = svgGen.generateLegend(
+    areas,
+    dimensions.width,
+    options.axisColor
+  )
+
+  const chartContent = `
+    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
+    ${areaPaths.join('\n    ')}
+    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
+    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
+    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
+    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`
+
+  const svg = svgGen.createSVGDocument(
+    dimensions,
+    options.label,
+    options.axisColor,
+    chartContent,
+    `\n  ${legend}`
+  )
+  const dataUrl = svgGen.svgToDataUrl(svg)
+
+  return {
+    id: `stacked-area-graph-${options.label.replace(/\s/g, '-').toLowerCase()}`,
+    url: dataUrl
   }
-  return response?.data
 }
 
 ///////////////////////////
