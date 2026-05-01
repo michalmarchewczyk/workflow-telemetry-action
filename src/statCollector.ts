@@ -32,22 +32,11 @@ async function triggerStatCollect(): Promise<void> {
 }
 
 async function reportWorkflowMetrics(): Promise<string> {
-  const themeInput: string = core.getInput('theme', { required: false })
-  let theme: 'light' | 'dark' = 'light'
-  
-  if (themeInput === 'dark') {
-    theme = 'dark'
-  } else if (themeInput === 'light') {
-    theme = 'light'
-  } else if (themeInput) {
-    core.warning(`Invalid theme: ${themeInput}, using 'light'`)
-  }
-
   const { userLoadX, systemLoadX } = await getCPUStats()
-  const { activeMemoryX, availableMemoryX } = await getMemoryStats()
+  const { activeMemoryX } = await getMemoryStats()
   const { networkReadX, networkWriteX } = await getNetworkStats()
   const { diskReadX, diskWriteX } = await getDiskStats()
-  const { diskAvailableX, diskUsedX } = await getDiskSizeStats()
+  const { diskUsedX } = await getDiskSizeStats()
 
   const cpuLoad =
     userLoadX && userLoadX.length && systemLoadX && systemLoadX.length
@@ -57,24 +46,19 @@ async function reportWorkflowMetrics(): Promise<string> {
           [
             { label: 'User Load', points: userLoadX },
             { label: 'System Load', points: systemLoadX }
-          ],
-          theme
+          ]
         )
       : null
 
   const memoryUsage =
     activeMemoryX &&
-    activeMemoryX.length &&
-    availableMemoryX &&
-    availableMemoryX.length
+    activeMemoryX.length
       ? mermaidGen.generateStackedChart(
           'Memory Usage (MB)',
           'Memory (MB)',
           [
             { label: 'Used', points: activeMemoryX },
-            { label: 'Free', points: availableMemoryX }
-          ],
-          theme
+          ]
         )
       : null
 
@@ -84,8 +68,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           'Network I/O Read (MB)',
           'Read (MB)',
           'Read',
-          networkReadX,
-          theme
+          networkReadX
         )
       : null
 
@@ -95,8 +78,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           'Network I/O Write (MB)',
           'Write (MB)',
           'Write',
-          networkWriteX,
-          theme
+          networkWriteX
         )
       : null
 
@@ -106,8 +88,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           'Disk I/O Read (MB)',
           'Read (MB)',
           'Read',
-          diskReadX,
-          theme
+          diskReadX
         )
       : null
 
@@ -117,21 +98,18 @@ async function reportWorkflowMetrics(): Promise<string> {
           'Disk I/O Write (MB)',
           'Write (MB)',
           'Write',
-          diskWriteX,
-          theme
+          diskWriteX
         )
       : null
 
   const diskSizeUsage =
-    diskUsedX && diskUsedX.length && diskAvailableX && diskAvailableX.length
+    diskUsedX && diskUsedX.length
       ? mermaidGen.generateStackedChart(
           'Disk Usage (MB)',
           'Size (MB)',
           [
             { label: 'Used', points: diskUsedX },
-            { label: 'Free', points: diskAvailableX }
-          ],
-          theme
+          ]
         )
       : null
 

@@ -5,7 +5,7 @@ import { ProcessedStats } from './interfaces'
  */
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp)
-  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`
+  return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
 }
 
 /**
@@ -57,7 +57,6 @@ export function generateLineChart(
   yAxisLabel: string,
   lineLabel: string,
   points: ProcessedStats[],
-  theme: 'light' | 'dark' = 'light'
 ): string {
   if (points.length === 0) {
     return `<!-- No data available for ${title} -->`
@@ -67,10 +66,7 @@ export function generateLineChart(
   const timeLabels = generateTimeLabels(sampledPoints)
   const values = generateValues(sampledPoints)
 
-  const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}"
-
   return `\`\`\`mermaid
-%%{init: ${themeConfig}}%%
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -86,8 +82,7 @@ xychart
 export function generateStackedChart(
   title: string,
   yAxisLabel: string,
-  areas: Array<{ label: string; points: ProcessedStats[] }>,
-  theme: 'light' | 'dark' = 'light'
+  areas: Array<{ label: string; points: ProcessedStats[] }>
 ): string {
   if (areas.length === 0 || areas[0].points.length === 0) {
     return `<!-- No data available for ${title} -->`
@@ -99,17 +94,15 @@ export function generateStackedChart(
   }))
 
   const timeLabels = generateTimeLabels(sampledAreas[0].points)
-  const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}"
 
   const lines = sampledAreas
     .map(area => {
       const values = generateValues(area.points)
-      return `    line "${area.label}" [${values.join(', ')}]`
+      return `    line [${values.join(', ')}]`
     })
     .join('\n')
 
   return `\`\`\`mermaid
-%%{init: ${themeConfig}}%%
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -125,8 +118,7 @@ ${lines}
 export function generateCumulativeStackedChart(
   title: string,
   yAxisLabel: string,
-  areas: Array<{ label: string; points: ProcessedStats[] }>,
-  theme: 'light' | 'dark' = 'light'
+  areas: Array<{ label: string; points: ProcessedStats[] }>
 ): string {
   if (areas.length === 0 || areas[0].points.length === 0) {
     return `<!-- No data available for ${title} -->`
@@ -138,7 +130,6 @@ export function generateCumulativeStackedChart(
   }))
 
   const timeLabels = generateTimeLabels(sampledAreas[0].points)
-  const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}"
 
   // Calculate cumulative values
   const cumulativeData: Array<{ label: string; values: number[] }> = []
@@ -160,11 +151,10 @@ export function generateCumulativeStackedChart(
   }
 
   const lines = cumulativeData
-    .map(data => `    line "${data.label}" [${data.values.join(', ')}]`)
+    .map(data => `    line [${data.values.join(', ')}]`)
     .join('\n')
 
   return `\`\`\`mermaid
-%%{init: ${themeConfig}}%%
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]

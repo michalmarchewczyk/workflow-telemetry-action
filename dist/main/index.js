@@ -44446,7 +44446,7 @@ exports.generateCumulativeStackedChart = exports.generateStackedChart = exports.
  */
 function formatTime(timestamp) {
     const date = new Date(timestamp);
-    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`;
 }
 /**
  * Sample data points to avoid overcrowding the chart
@@ -44482,16 +44482,14 @@ function generateValues(points) {
 /**
  * Generate a line chart using Mermaid XY chart syntax
  */
-function generateLineChart(title, yAxisLabel, lineLabel, points, theme = 'light') {
+function generateLineChart(title, yAxisLabel, lineLabel, points) {
     if (points.length === 0) {
         return `<!-- No data available for ${title} -->`;
     }
     const sampledPoints = sampleDataPoints(points);
     const timeLabels = generateTimeLabels(sampledPoints);
     const values = generateValues(sampledPoints);
-    const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}";
     return `\`\`\`mermaid
-%%{init: ${themeConfig}}%%
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -44504,7 +44502,7 @@ exports.generateLineChart = generateLineChart;
  * Generate a stacked area/bar chart using Mermaid XY chart syntax
  * Note: Mermaid XY charts don't support true stacked areas, so we use multiple lines
  */
-function generateStackedChart(title, yAxisLabel, areas, theme = 'light') {
+function generateStackedChart(title, yAxisLabel, areas) {
     if (areas.length === 0 || areas[0].points.length === 0) {
         return `<!-- No data available for ${title} -->`;
     }
@@ -44513,15 +44511,13 @@ function generateStackedChart(title, yAxisLabel, areas, theme = 'light') {
         points: sampleDataPoints(area.points)
     }));
     const timeLabels = generateTimeLabels(sampledAreas[0].points);
-    const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}";
     const lines = sampledAreas
         .map(area => {
         const values = generateValues(area.points);
-        return `    line "${area.label}" [${values.join(', ')}]`;
+        return `    line [${values.join(', ')}]`;
     })
         .join('\n');
     return `\`\`\`mermaid
-%%{init: ${themeConfig}}%%
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -44534,7 +44530,7 @@ exports.generateStackedChart = generateStackedChart;
  * Generate a chart showing cumulative stacked values
  * This is useful for memory/disk usage where you want to show total capacity
  */
-function generateCumulativeStackedChart(title, yAxisLabel, areas, theme = 'light') {
+function generateCumulativeStackedChart(title, yAxisLabel, areas) {
     if (areas.length === 0 || areas[0].points.length === 0) {
         return `<!-- No data available for ${title} -->`;
     }
@@ -44543,7 +44539,6 @@ function generateCumulativeStackedChart(title, yAxisLabel, areas, theme = 'light
         points: sampleDataPoints(area.points)
     }));
     const timeLabels = generateTimeLabels(sampledAreas[0].points);
-    const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}";
     // Calculate cumulative values
     const cumulativeData = [];
     const numPoints = sampledAreas[0].points.length;
@@ -44562,10 +44557,9 @@ function generateCumulativeStackedChart(title, yAxisLabel, areas, theme = 'light
         });
     }
     const lines = cumulativeData
-        .map(data => `    line "${data.label}" [${data.values.join(', ')}]`)
+        .map(data => `    line [${data.values.join(', ')}]`)
         .join('\n');
     return `\`\`\`mermaid
-%%{init: ${themeConfig}}%%
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -45081,54 +45075,39 @@ function triggerStatCollect() {
 }
 function reportWorkflowMetrics() {
     return __awaiter(this, void 0, void 0, function* () {
-        const themeInput = core.getInput('theme', { required: false });
-        let theme = 'light';
-        if (themeInput === 'dark') {
-            theme = 'dark';
-        }
-        else if (themeInput === 'light') {
-            theme = 'light';
-        }
-        else if (themeInput) {
-            core.warning(`Invalid theme: ${themeInput}, using 'light'`);
-        }
         const { userLoadX, systemLoadX } = yield getCPUStats();
-        const { activeMemoryX, availableMemoryX } = yield getMemoryStats();
+        const { activeMemoryX } = yield getMemoryStats();
         const { networkReadX, networkWriteX } = yield getNetworkStats();
         const { diskReadX, diskWriteX } = yield getDiskStats();
-        const { diskAvailableX, diskUsedX } = yield getDiskSizeStats();
+        const { diskUsedX } = yield getDiskSizeStats();
         const cpuLoad = userLoadX && userLoadX.length && systemLoadX && systemLoadX.length
             ? mermaidGen.generateStackedChart('CPU Load (%)', 'Load %', [
                 { label: 'User Load', points: userLoadX },
                 { label: 'System Load', points: systemLoadX }
-            ], theme)
+            ])
             : null;
         const memoryUsage = activeMemoryX &&
-            activeMemoryX.length &&
-            availableMemoryX &&
-            availableMemoryX.length
+            activeMemoryX.length
             ? mermaidGen.generateStackedChart('Memory Usage (MB)', 'Memory (MB)', [
                 { label: 'Used', points: activeMemoryX },
-                { label: 'Free', points: availableMemoryX }
-            ], theme)
+            ])
             : null;
         const networkIORead = networkReadX && networkReadX.length
-            ? mermaidGen.generateLineChart('Network I/O Read (MB)', 'Read (MB)', 'Read', networkReadX, theme)
+            ? mermaidGen.generateLineChart('Network I/O Read (MB)', 'Read (MB)', 'Read', networkReadX)
             : null;
         const networkIOWrite = networkWriteX && networkWriteX.length
-            ? mermaidGen.generateLineChart('Network I/O Write (MB)', 'Write (MB)', 'Write', networkWriteX, theme)
+            ? mermaidGen.generateLineChart('Network I/O Write (MB)', 'Write (MB)', 'Write', networkWriteX)
             : null;
         const diskIORead = diskReadX && diskReadX.length
-            ? mermaidGen.generateLineChart('Disk I/O Read (MB)', 'Read (MB)', 'Read', diskReadX, theme)
+            ? mermaidGen.generateLineChart('Disk I/O Read (MB)', 'Read (MB)', 'Read', diskReadX)
             : null;
         const diskIOWrite = diskWriteX && diskWriteX.length
-            ? mermaidGen.generateLineChart('Disk I/O Write (MB)', 'Write (MB)', 'Write', diskWriteX, theme)
+            ? mermaidGen.generateLineChart('Disk I/O Write (MB)', 'Write (MB)', 'Write', diskWriteX)
             : null;
-        const diskSizeUsage = diskUsedX && diskUsedX.length && diskAvailableX && diskAvailableX.length
+        const diskSizeUsage = diskUsedX && diskUsedX.length
             ? mermaidGen.generateStackedChart('Disk Usage (MB)', 'Size (MB)', [
                 { label: 'Used', points: diskUsedX },
-                { label: 'Free', points: diskAvailableX }
-            ], theme)
+            ])
             : null;
         const postContentItems = [];
         if (cpuLoad) {
