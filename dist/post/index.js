@@ -54197,6 +54197,150 @@ exports.error = error;
 
 /***/ }),
 
+/***/ 2498:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateCumulativeStackedChart = exports.generateStackedChart = exports.generateLineChart = void 0;
+/**
+ * Format timestamp to HH:MM format
+ */
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+}
+/**
+ * Sample data points to avoid overcrowding the chart
+ * Mermaid has limitations on the number of data points
+ */
+function sampleDataPoints(points, maxPoints = 20) {
+    if (points.length <= maxPoints) {
+        return points;
+    }
+    const sampledPoints = [];
+    const step = Math.floor(points.length / maxPoints);
+    for (let i = 0; i < points.length; i += step) {
+        sampledPoints.push(points[i]);
+    }
+    // Always include the last point
+    if (sampledPoints[sampledPoints.length - 1] !== points[points.length - 1]) {
+        sampledPoints.push(points[points.length - 1]);
+    }
+    return sampledPoints;
+}
+/**
+ * Generate time labels from data points
+ */
+function generateTimeLabels(points) {
+    return points.map(p => formatTime(p.x));
+}
+/**
+ * Generate values array from data points
+ */
+function generateValues(points) {
+    return points.map(p => Math.round(p.y * 100) / 100);
+}
+/**
+ * Generate a line chart using Mermaid XY chart syntax
+ */
+function generateLineChart(title, yAxisLabel, lineLabel, points, theme = 'light') {
+    if (points.length === 0) {
+        return `<!-- No data available for ${title} -->`;
+    }
+    const sampledPoints = sampleDataPoints(points);
+    const timeLabels = generateTimeLabels(sampledPoints);
+    const values = generateValues(sampledPoints);
+    const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}";
+    return `\`\`\`mermaid
+%%{init: ${themeConfig}}%%
+xychart
+    title "${title}"
+    x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
+    y-axis "${yAxisLabel}"
+    line [${values.join(', ')}]
+\`\`\``;
+}
+exports.generateLineChart = generateLineChart;
+/**
+ * Generate a stacked area/bar chart using Mermaid XY chart syntax
+ * Note: Mermaid XY charts don't support true stacked areas, so we use multiple lines
+ */
+function generateStackedChart(title, yAxisLabel, areas, theme = 'light') {
+    if (areas.length === 0 || areas[0].points.length === 0) {
+        return `<!-- No data available for ${title} -->`;
+    }
+    const sampledAreas = areas.map(area => ({
+        label: area.label,
+        points: sampleDataPoints(area.points)
+    }));
+    const timeLabels = generateTimeLabels(sampledAreas[0].points);
+    const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}";
+    const lines = sampledAreas
+        .map(area => {
+        const values = generateValues(area.points);
+        return `    line "${area.label}" [${values.join(', ')}]`;
+    })
+        .join('\n');
+    return `\`\`\`mermaid
+%%{init: ${themeConfig}}%%
+xychart
+    title "${title}"
+    x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
+    y-axis "${yAxisLabel}"
+${lines}
+\`\`\``;
+}
+exports.generateStackedChart = generateStackedChart;
+/**
+ * Generate a chart showing cumulative stacked values
+ * This is useful for memory/disk usage where you want to show total capacity
+ */
+function generateCumulativeStackedChart(title, yAxisLabel, areas, theme = 'light') {
+    if (areas.length === 0 || areas[0].points.length === 0) {
+        return `<!-- No data available for ${title} -->`;
+    }
+    const sampledAreas = areas.map(area => ({
+        label: area.label,
+        points: sampleDataPoints(area.points)
+    }));
+    const timeLabels = generateTimeLabels(sampledAreas[0].points);
+    const themeConfig = theme === 'dark' ? "{'theme':'dark'}" : "{'theme':'base'}";
+    // Calculate cumulative values
+    const cumulativeData = [];
+    const numPoints = sampledAreas[0].points.length;
+    for (let i = 0; i < sampledAreas.length; i++) {
+        const values = [];
+        for (let j = 0; j < numPoints; j++) {
+            let sum = sampledAreas[i].points[j].y;
+            for (let k = 0; k < i; k++) {
+                sum += sampledAreas[k].points[j].y;
+            }
+            values.push(Math.round(sum * 100) / 100);
+        }
+        cumulativeData.push({
+            label: sampledAreas[i].label,
+            values
+        });
+    }
+    const lines = cumulativeData
+        .map(data => `    line "${data.label}" [${data.values.join(', ')}]`)
+        .join('\n');
+    return `\`\`\`mermaid
+%%{init: ${themeConfig}}%%
+xychart
+    title "${title}"
+    x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
+    y-axis "${yAxisLabel}"
+${lines}
+\`\`\``;
+}
+exports.generateCumulativeStackedChart = generateCumulativeStackedChart;
+
+
+/***/ }),
+
 /***/ 7051:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
@@ -54860,10 +55004,8 @@ const path_1 = __importDefault(__nccwpck_require__(1017));
 const axios_1 = __importDefault(__nccwpck_require__(8757));
 const core = __importStar(__nccwpck_require__(2186));
 const logger = __importStar(__nccwpck_require__(4636));
-const svgGen = __importStar(__nccwpck_require__(5743));
+const mermaidGen = __importStar(__nccwpck_require__(2498));
 const STAT_SERVER_PORT = 7777;
-const BLACK = '#000000';
-const WHITE = '#FFFFFF';
 function triggerStatCollect() {
     return __awaiter(this, void 0, void 0, function* () {
         logger.debug('Triggering stat collect ...');
@@ -54875,17 +55017,16 @@ function triggerStatCollect() {
 }
 function reportWorkflowMetrics() {
     return __awaiter(this, void 0, void 0, function* () {
-        const theme = core.getInput('theme', { required: false });
-        let axisColor = BLACK;
-        switch (theme) {
-            case 'light':
-                axisColor = BLACK;
-                break;
-            case 'dark':
-                axisColor = WHITE;
-                break;
-            default:
-                core.warning(`Invalid theme: ${theme}`);
+        const themeInput = core.getInput('theme', { required: false });
+        let theme = 'light';
+        if (themeInput === 'dark') {
+            theme = 'dark';
+        }
+        else if (themeInput === 'light') {
+            theme = 'light';
+        }
+        else if (themeInput) {
+            core.warning(`Invalid theme: ${themeInput}, using 'light'`);
         }
         const { userLoadX, systemLoadX } = yield getCPUStats();
         const { activeMemoryX, availableMemoryX } = yield getMemoryStats();
@@ -54893,124 +55034,62 @@ function reportWorkflowMetrics() {
         const { diskReadX, diskWriteX } = yield getDiskStats();
         const { diskAvailableX, diskUsedX } = yield getDiskSizeStats();
         const cpuLoad = userLoadX && userLoadX.length && systemLoadX && systemLoadX.length
-            ? yield getStackedAreaGraph({
-                label: 'CPU Load (%)',
-                axisColor,
-                areas: [
-                    {
-                        label: 'User Load',
-                        color: '#e41a1c99',
-                        points: userLoadX
-                    },
-                    {
-                        label: 'System Load',
-                        color: '#ff7f0099',
-                        points: systemLoadX
-                    }
-                ]
-            })
+            ? mermaidGen.generateStackedChart('CPU Load (%)', 'Load %', [
+                { label: 'User Load', points: userLoadX },
+                { label: 'System Load', points: systemLoadX }
+            ], theme)
             : null;
         const memoryUsage = activeMemoryX &&
             activeMemoryX.length &&
             availableMemoryX &&
             availableMemoryX.length
-            ? yield getStackedAreaGraph({
-                label: 'Memory Usage (MB)',
-                axisColor,
-                areas: [
-                    {
-                        label: 'Used',
-                        color: '#377eb899',
-                        points: activeMemoryX
-                    },
-                    {
-                        label: 'Free',
-                        color: '#4daf4a99',
-                        points: availableMemoryX
-                    }
-                ]
-            })
+            ? mermaidGen.generateStackedChart('Memory Usage (MB)', 'Memory (MB)', [
+                { label: 'Used', points: activeMemoryX },
+                { label: 'Free', points: availableMemoryX }
+            ], theme)
             : null;
         const networkIORead = networkReadX && networkReadX.length
-            ? yield getLineGraph({
-                label: 'Network I/O Read (MB)',
-                axisColor,
-                line: {
-                    label: 'Read',
-                    color: '#be4d25',
-                    points: networkReadX
-                }
-            })
+            ? mermaidGen.generateLineChart('Network I/O Read (MB)', 'Read (MB)', 'Read', networkReadX, theme)
             : null;
         const networkIOWrite = networkWriteX && networkWriteX.length
-            ? yield getLineGraph({
-                label: 'Network I/O Write (MB)',
-                axisColor,
-                line: {
-                    label: 'Write',
-                    color: '#6c25be',
-                    points: networkWriteX
-                }
-            })
+            ? mermaidGen.generateLineChart('Network I/O Write (MB)', 'Write (MB)', 'Write', networkWriteX, theme)
             : null;
         const diskIORead = diskReadX && diskReadX.length
-            ? yield getLineGraph({
-                label: 'Disk I/O Read (MB)',
-                axisColor,
-                line: {
-                    label: 'Read',
-                    color: '#be4d25',
-                    points: diskReadX
-                }
-            })
+            ? mermaidGen.generateLineChart('Disk I/O Read (MB)', 'Read (MB)', 'Read', diskReadX, theme)
             : null;
         const diskIOWrite = diskWriteX && diskWriteX.length
-            ? yield getLineGraph({
-                label: 'Disk I/O Write (MB)',
-                axisColor,
-                line: {
-                    label: 'Write',
-                    color: '#6c25be',
-                    points: diskWriteX
-                }
-            })
+            ? mermaidGen.generateLineChart('Disk I/O Write (MB)', 'Write (MB)', 'Write', diskWriteX, theme)
             : null;
         const diskSizeUsage = diskUsedX && diskUsedX.length && diskAvailableX && diskAvailableX.length
-            ? yield getStackedAreaGraph({
-                label: 'Disk Usage (MB)',
-                axisColor,
-                areas: [
-                    {
-                        label: 'Used',
-                        color: '#377eb899',
-                        points: diskUsedX
-                    },
-                    {
-                        label: 'Free',
-                        color: '#4daf4a99',
-                        points: diskAvailableX
-                    }
-                ]
-            })
+            ? mermaidGen.generateStackedChart('Disk Usage (MB)', 'Size (MB)', [
+                { label: 'Used', points: diskUsedX },
+                { label: 'Free', points: diskAvailableX }
+            ], theme)
             : null;
         const postContentItems = [];
         if (cpuLoad) {
-            postContentItems.push('### CPU Metrics', `![${cpuLoad.id}](${cpuLoad.url})`, '');
+            postContentItems.push('### CPU Metrics', '', cpuLoad, '');
         }
         if (memoryUsage) {
-            postContentItems.push('### Memory Metrics', `![${memoryUsage.id}](${memoryUsage.url})`, '');
+            postContentItems.push('### Memory Metrics', '', memoryUsage, '');
         }
-        if ((networkIORead && networkIOWrite) || (diskIORead && diskIOWrite)) {
-            postContentItems.push('### IO Metrics', '|               | Read      | Write     |', '|---            |---        |---        |');
+        if (networkIORead || networkIOWrite || diskIORead || diskIOWrite) {
+            postContentItems.push('### IO Metrics', '');
         }
-        if (networkIORead && networkIOWrite) {
-            postContentItems.push(`| Network I/O   | ![${networkIORead.id}](${networkIORead.url})        | ![${networkIOWrite.id}](${networkIOWrite.url})        |`);
+        if (networkIORead) {
+            postContentItems.push('#### Network I/O Read', '', networkIORead, '');
         }
-        if (diskIORead && diskIOWrite) {
-            postContentItems.push(`| Disk I/O      | ![${diskIORead.id}](${diskIORead.url})              | ![${diskIOWrite.id}](${diskIOWrite.url})              |`);
+        if (networkIOWrite) {
+            postContentItems.push('#### Network I/O Write', '', networkIOWrite, '');
+        }
+        if (diskIORead) {
+            postContentItems.push('#### Disk I/O Read', '', diskIORead, '');
+        }
+        if (diskIOWrite) {
+            postContentItems.push('#### Disk I/O Write', '', diskIOWrite, '');
         }
         if (diskSizeUsage) {
-            postContentItems.push('### Disk Size Metrics', `![${diskSizeUsage.id}](${diskSizeUsage.url})`, '');
+            postContentItems.push('### Disk Size Metrics', '', diskSizeUsage, '');
         }
         return postContentItems.join('\n');
     });
@@ -55129,61 +55208,6 @@ function getDiskSizeStats() {
             });
         });
         return { diskAvailableX, diskUsedX };
-    });
-}
-function getLineGraph(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const points = options.line.points;
-        if (points.length === 0) {
-            return { id: 'empty-line-graph', url: '' };
-        }
-        const dimensions = svgGen.getChartDimensions(1000, 500, 40);
-        const dataRange = svgGen.calculateDataRange(points);
-        const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions);
-        const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth);
-        const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight);
-        const pathData = svgGen.generateLinePath(points, scaleFunctions);
-        const chartContent = `
-    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
-    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
-    <path d="${pathData}" fill="none" stroke="${options.line.color}" stroke-width="2"/>
-    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
-    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
-    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`;
-        const svg = svgGen.createSVGDocument(dimensions, options.label, options.axisColor, chartContent);
-        const dataUrl = svgGen.svgToDataUrl(svg);
-        return {
-            id: `line-graph-${options.line.label.replace(/\s/g, '-').toLowerCase()}`,
-            url: dataUrl
-        };
-    });
-}
-function getStackedAreaGraph(options) {
-    return __awaiter(this, void 0, void 0, function* () {
-        const areas = options.areas;
-        if (areas.length === 0 || areas[0].points.length === 0) {
-            return { id: 'empty-stacked-area-graph', url: '' };
-        }
-        const dimensions = svgGen.getChartDimensions(1000, 500, 60);
-        const dataRange = svgGen.calculateStackedDataRange(areas);
-        const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions);
-        const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth);
-        const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight);
-        const areaPaths = svgGen.generateStackedAreaPaths(areas, scaleFunctions);
-        const legend = svgGen.generateLegend(areas, dimensions.width, options.axisColor);
-        const chartContent = `
-    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
-    ${areaPaths.join('\n    ')}
-    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
-    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
-    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
-    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`;
-        const svg = svgGen.createSVGDocument(dimensions, options.label, options.axisColor, chartContent, `\n  ${legend}`);
-        const dataUrl = svgGen.svgToDataUrl(svg);
-        return {
-            id: `stacked-area-graph-${options.label.replace(/\s/g, '-').toLowerCase()}`,
-            url: dataUrl
-        };
     });
 }
 ///////////////////////////
@@ -55394,256 +55418,6 @@ function report(currentJob) {
     });
 }
 exports.report = report;
-
-
-/***/ }),
-
-/***/ 5743:
-/***/ ((__unused_webpack_module, exports) => {
-
-"use strict";
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.svgToDataUrl = exports.createSVGDocument = exports.generateLegend = exports.generateStackedAreaPaths = exports.generateLinePath = exports.generateAxisLabels = exports.generateYAxisTicksAndLabels = exports.generateXAxisTicksAndLabels = exports.generateAxes = exports.generateGridLines = exports.generateYAxisTicks = exports.generateTimeTicks = exports.createScaleFunctions = exports.calculateStackedDataRange = exports.calculateDataRange = exports.getChartDimensions = void 0;
-/**
- * Get chart dimensions with default padding
- */
-function getChartDimensions(width = 1000, height = 500, topPadding = 40) {
-    const padding = { top: topPadding, right: 40, bottom: 60, left: 80 };
-    return {
-        width,
-        height,
-        padding,
-        chartWidth: width - padding.left - padding.right,
-        chartHeight: height - padding.top - padding.bottom
-    };
-}
-exports.getChartDimensions = getChartDimensions;
-/**
- * Calculate data range from points
- */
-function calculateDataRange(points, paddingPercent = 0.1) {
-    const xValues = points.map(p => new Date(p.x).getTime());
-    const yValues = points.map(p => p.y);
-    return {
-        xMin: Math.min(...xValues),
-        xMax: Math.max(...xValues),
-        yMin: 0,
-        yMax: Math.max(...yValues) * (1 + paddingPercent)
-    };
-}
-exports.calculateDataRange = calculateDataRange;
-/**
- * Calculate data range for stacked areas
- */
-function calculateStackedDataRange(areas, paddingPercent = 0.1) {
-    const points = areas[0].points;
-    const xValues = points.map(p => new Date(p.x).getTime());
-    let yMax = 0;
-    for (let i = 0; i < points.length; i++) {
-        let stackedValue = 0;
-        for (const area of areas) {
-            stackedValue += area.points[i].y;
-        }
-        yMax = Math.max(yMax, stackedValue);
-    }
-    return {
-        xMin: Math.min(...xValues),
-        xMax: Math.max(...xValues),
-        yMin: 0,
-        yMax: yMax * (1 + paddingPercent)
-    };
-}
-exports.calculateStackedDataRange = calculateStackedDataRange;
-/**
- * Create scale functions for mapping data to pixel coordinates
- */
-function createScaleFunctions(dataRange, dimensions) {
-    const { xMin, xMax, yMin, yMax } = dataRange;
-    const { chartWidth, chartHeight } = dimensions;
-    return {
-        scaleX: (x) => ((x - xMin) / (xMax - xMin)) * chartWidth,
-        scaleY: (y) => chartHeight - ((y - yMin) / (yMax - yMin)) * chartHeight
-    };
-}
-exports.createScaleFunctions = createScaleFunctions;
-/**
- * Generate time axis ticks
- */
-function generateTimeTicks(dataRange, chartWidth, numTicks = 5) {
-    const { xMin, xMax } = dataRange;
-    const ticks = [];
-    for (let i = 0; i <= numTicks; i++) {
-        const tickTime = xMin + (i * (xMax - xMin)) / numTicks;
-        const tickX = (i * chartWidth) / numTicks;
-        const date = new Date(tickTime);
-        const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-        ticks.push({ x: tickX, label: timeStr });
-    }
-    return ticks;
-}
-exports.generateTimeTicks = generateTimeTicks;
-/**
- * Generate Y-axis ticks
- */
-function generateYAxisTicks(dataRange, chartHeight, numTicks = 5) {
-    const { yMin, yMax } = dataRange;
-    const ticks = [];
-    for (let i = 0; i <= numTicks; i++) {
-        const tickValue = yMin + (i * (yMax - yMin)) / numTicks;
-        const tickY = chartHeight - (i * chartHeight) / numTicks;
-        ticks.push({ y: tickY, label: tickValue.toFixed(1) });
-    }
-    return ticks;
-}
-exports.generateYAxisTicks = generateYAxisTicks;
-/**
- * Generate grid lines SVG
- */
-function generateGridLines(yTicks, chartWidth) {
-    return yTicks
-        .map(tick => `<line x1="0" y1="${tick.y}" x2="${chartWidth}" y2="${tick.y}" stroke="#e0e0e0" stroke-width="1"/>`)
-        .join('\n    ');
-}
-exports.generateGridLines = generateGridLines;
-/**
- * Generate axes SVG
- */
-function generateAxes(chartWidth, chartHeight, axisColor) {
-    return `<line x1="0" y1="${chartHeight}" x2="${chartWidth}" y2="${chartHeight}" stroke="${axisColor}" stroke-width="2"/>
-    <line x1="0" y1="0" x2="0" y2="${chartHeight}" stroke="${axisColor}" stroke-width="2"/>`;
-}
-exports.generateAxes = generateAxes;
-/**
- * Generate X-axis ticks and labels SVG
- */
-function generateXAxisTicksAndLabels(timeTicks, chartHeight, axisColor) {
-    return timeTicks
-        .map(tick => `
-    <line x1="${tick.x}" y1="${chartHeight}" x2="${tick.x}" y2="${chartHeight + 5}" stroke="${axisColor}" stroke-width="1"/>
-    <text x="${tick.x}" y="${chartHeight + 20}" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="${axisColor}">${tick.label}</text>
-    `)
-        .join('');
-}
-exports.generateXAxisTicksAndLabels = generateXAxisTicksAndLabels;
-/**
- * Generate Y-axis ticks and labels SVG
- */
-function generateYAxisTicksAndLabels(yTicks, axisColor) {
-    return yTicks
-        .map(tick => {
-        var _a, _b, _c;
-        return `
-    <line x1="-5" y1="${(_a = tick.y) !== null && _a !== void 0 ? _a : 0}" x2="0" y2="${(_b = tick.y) !== null && _b !== void 0 ? _b : 0}" stroke="${axisColor}" stroke-width="1"/>
-    <text x="-10" y="${((_c = tick.y) !== null && _c !== void 0 ? _c : 0) + 4}" text-anchor="end" font-family="Arial, sans-serif" font-size="12" fill="${axisColor}">${tick.label}</text>
-    `;
-    })
-        .join('');
-}
-exports.generateYAxisTicksAndLabels = generateYAxisTicksAndLabels;
-/**
- * Generate axis labels SVG
- */
-function generateAxisLabels(chartWidth, chartHeight, axisColor) {
-    return `<!-- X-axis label -->
-    <text x="${chartWidth / 2}" y="${chartHeight + 45}" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${axisColor}">Time</text>
-    
-    <!-- Y-axis label -->
-    <text x="${-chartHeight / 2}" y="-50" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="${axisColor}" transform="rotate(-90)">value</text>`;
-}
-exports.generateAxisLabels = generateAxisLabels;
-/**
- * Generate line graph path
- */
-function generateLinePath(points, scaleFunctions) {
-    return points
-        .map((p, i) => {
-        const x = scaleFunctions.scaleX(new Date(p.x).getTime());
-        const y = scaleFunctions.scaleY(p.y);
-        return `${i === 0 ? 'M' : 'L'} ${x},${y}`;
-    })
-        .join(' ');
-}
-exports.generateLinePath = generateLinePath;
-/**
- * Generate stacked area paths
- */
-function generateStackedAreaPaths(areas, scaleFunctions) {
-    const areaPaths = [];
-    const points = areas[0].points;
-    let previousYValues = new Array(points.length).fill(0);
-    for (const area of areas) {
-        const pathPoints = [];
-        // Top edge
-        for (let i = 0; i < area.points.length; i++) {
-            const x = scaleFunctions.scaleX(new Date(area.points[i].x).getTime());
-            const y = scaleFunctions.scaleY(previousYValues[i] + area.points[i].y);
-            pathPoints.push({ x, y });
-        }
-        // Bottom edge (reversed)
-        for (let i = area.points.length - 1; i >= 0; i--) {
-            const x = scaleFunctions.scaleX(new Date(area.points[i].x).getTime());
-            const y = scaleFunctions.scaleY(previousYValues[i]);
-            pathPoints.push({ x, y });
-        }
-        const pathData = pathPoints
-            .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x},${p.y}`)
-            .join(' ') + ' Z';
-        areaPaths.push(`<path d="${pathData}" fill="${area.color}" stroke="none"/>`);
-        // Update previous values for stacking
-        for (let i = 0; i < area.points.length; i++) {
-            previousYValues[i] += area.points[i].y;
-        }
-    }
-    return areaPaths;
-}
-exports.generateStackedAreaPaths = generateStackedAreaPaths;
-/**
- * Generate legend for stacked area graph
- */
-function generateLegend(areas, width, axisColor) {
-    const legendItemWidth = 120;
-    const legendStartX = (width - areas.length * legendItemWidth) / 2;
-    return areas
-        .map((area, i) => {
-        const x = legendStartX + i * legendItemWidth;
-        return `
-    <rect x="${x}" y="15" width="15" height="15" fill="${area.color}"/>
-    <text x="${x + 20}" y="27" font-family="Arial, sans-serif" font-size="12" fill="${axisColor}">${area.label}</text>
-    `;
-    })
-        .join('');
-}
-exports.generateLegend = generateLegend;
-/**
- * Create complete SVG document
- */
-function createSVGDocument(dimensions, title, axisColor, chartContent, headerContent = '') {
-    const { width, height, padding } = dimensions;
-    return `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-  <rect width="${width}" height="${height}" fill="white"/>
-  
-  ${headerContent}
-  
-  <!-- Title -->
-  <text x="${width / 2}" y="${padding.top > 50 ? 48 : 25}" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="${axisColor}">${title}</text>
-  
-  <!-- Chart area -->
-  <g transform="translate(${padding.left},${padding.top})">
-    ${chartContent}
-  </g>
-</svg>`;
-}
-exports.createSVGDocument = createSVGDocument;
-/**
- * Convert SVG string to base64 data URL
- */
-function svgToDataUrl(svg) {
-    const base64Svg = Buffer.from(svg).toString('base64');
-    return `data:image/svg+xml;base64,${base64Svg}`;
-}
-exports.svgToDataUrl = svgToDataUrl;
 
 
 /***/ }),

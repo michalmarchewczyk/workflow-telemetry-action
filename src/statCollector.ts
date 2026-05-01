@@ -6,8 +6,6 @@ import {
   CPUStats,
   DiskSizeStats,
   DiskStats,
-  GraphResponse,
-  LineGraphOptions,
   MemoryStats,
   NetworkStats,
   ProcessedCPUStats,
@@ -16,16 +14,12 @@ import {
   ProcessedMemoryStats,
   ProcessedNetworkStats,
   ProcessedStats,
-  StackedAreaGraphOptions,
   WorkflowJobType
 } from './interfaces'
 import * as logger from './logger'
-import * as svgGen from './svgGraphGenerator'
+import * as mermaidGen from './mermaidChartGenerator'
 
 const STAT_SERVER_PORT = 7777
-
-const BLACK = '#000000'
-const WHITE = '#FFFFFF'
 
 async function triggerStatCollect(): Promise<void> {
   logger.debug('Triggering stat collect ...')
@@ -38,17 +32,15 @@ async function triggerStatCollect(): Promise<void> {
 }
 
 async function reportWorkflowMetrics(): Promise<string> {
-  const theme: string = core.getInput('theme', { required: false })
-  let axisColor = BLACK
-  switch (theme) {
-    case 'light':
-      axisColor = BLACK
-      break
-    case 'dark':
-      axisColor = WHITE
-      break
-    default:
-      core.warning(`Invalid theme: ${theme}`)
+  const themeInput: string = core.getInput('theme', { required: false })
+  let theme: 'light' | 'dark' = 'light'
+  
+  if (themeInput === 'dark') {
+    theme = 'dark'
+  } else if (themeInput === 'light') {
+    theme = 'light'
+  } else if (themeInput) {
+    core.warning(`Invalid theme: ${themeInput}, using 'light'`)
   }
 
   const { userLoadX, systemLoadX } = await getCPUStats()
@@ -59,22 +51,15 @@ async function reportWorkflowMetrics(): Promise<string> {
 
   const cpuLoad =
     userLoadX && userLoadX.length && systemLoadX && systemLoadX.length
-      ? await getStackedAreaGraph({
-          label: 'CPU Load (%)',
-          axisColor,
-          areas: [
-            {
-              label: 'User Load',
-              color: '#e41a1c99',
-              points: userLoadX
-            },
-            {
-              label: 'System Load',
-              color: '#ff7f0099',
-              points: systemLoadX
-            }
-          ]
-        })
+      ? mermaidGen.generateStackedChart(
+          'CPU Load (%)',
+          'Load %',
+          [
+            { label: 'User Load', points: userLoadX },
+            { label: 'System Load', points: systemLoadX }
+          ],
+          theme
+        )
       : null
 
   const memoryUsage =
@@ -82,134 +67,98 @@ async function reportWorkflowMetrics(): Promise<string> {
     activeMemoryX.length &&
     availableMemoryX &&
     availableMemoryX.length
-      ? await getStackedAreaGraph({
-          label: 'Memory Usage (MB)',
-          axisColor,
-          areas: [
-            {
-              label: 'Used',
-              color: '#377eb899',
-              points: activeMemoryX
-            },
-            {
-              label: 'Free',
-              color: '#4daf4a99',
-              points: availableMemoryX
-            }
-          ]
-        })
+      ? mermaidGen.generateStackedChart(
+          'Memory Usage (MB)',
+          'Memory (MB)',
+          [
+            { label: 'Used', points: activeMemoryX },
+            { label: 'Free', points: availableMemoryX }
+          ],
+          theme
+        )
       : null
 
   const networkIORead =
     networkReadX && networkReadX.length
-      ? await getLineGraph({
-          label: 'Network I/O Read (MB)',
-          axisColor,
-          line: {
-            label: 'Read',
-            color: '#be4d25',
-            points: networkReadX
-          }
-        })
+      ? mermaidGen.generateLineChart(
+          'Network I/O Read (MB)',
+          'Read (MB)',
+          'Read',
+          networkReadX,
+          theme
+        )
       : null
 
   const networkIOWrite =
     networkWriteX && networkWriteX.length
-      ? await getLineGraph({
-          label: 'Network I/O Write (MB)',
-          axisColor,
-          line: {
-            label: 'Write',
-            color: '#6c25be',
-            points: networkWriteX
-          }
-        })
+      ? mermaidGen.generateLineChart(
+          'Network I/O Write (MB)',
+          'Write (MB)',
+          'Write',
+          networkWriteX,
+          theme
+        )
       : null
 
   const diskIORead =
     diskReadX && diskReadX.length
-      ? await getLineGraph({
-          label: 'Disk I/O Read (MB)',
-          axisColor,
-          line: {
-            label: 'Read',
-            color: '#be4d25',
-            points: diskReadX
-          }
-        })
+      ? mermaidGen.generateLineChart(
+          'Disk I/O Read (MB)',
+          'Read (MB)',
+          'Read',
+          diskReadX,
+          theme
+        )
       : null
 
   const diskIOWrite =
     diskWriteX && diskWriteX.length
-      ? await getLineGraph({
-          label: 'Disk I/O Write (MB)',
-          axisColor,
-          line: {
-            label: 'Write',
-            color: '#6c25be',
-            points: diskWriteX
-          }
-        })
+      ? mermaidGen.generateLineChart(
+          'Disk I/O Write (MB)',
+          'Write (MB)',
+          'Write',
+          diskWriteX,
+          theme
+        )
       : null
 
   const diskSizeUsage =
     diskUsedX && diskUsedX.length && diskAvailableX && diskAvailableX.length
-      ? await getStackedAreaGraph({
-          label: 'Disk Usage (MB)',
-          axisColor,
-          areas: [
-            {
-              label: 'Used',
-              color: '#377eb899',
-              points: diskUsedX
-            },
-            {
-              label: 'Free',
-              color: '#4daf4a99',
-              points: diskAvailableX
-            }
-          ]
-        })
+      ? mermaidGen.generateStackedChart(
+          'Disk Usage (MB)',
+          'Size (MB)',
+          [
+            { label: 'Used', points: diskUsedX },
+            { label: 'Free', points: diskAvailableX }
+          ],
+          theme
+        )
       : null
 
   const postContentItems: string[] = []
   if (cpuLoad) {
-    postContentItems.push(
-      '### CPU Metrics',
-      `![${cpuLoad.id}](${cpuLoad.url})`,
-      ''
-    )
+    postContentItems.push('### CPU Metrics', '', cpuLoad, '')
   }
   if (memoryUsage) {
-    postContentItems.push(
-      '### Memory Metrics',
-      `![${memoryUsage.id}](${memoryUsage.url})`,
-      ''
-    )
+    postContentItems.push('### Memory Metrics', '', memoryUsage, '')
   }
-  if ((networkIORead && networkIOWrite) || (diskIORead && diskIOWrite)) {
-    postContentItems.push(
-      '### IO Metrics',
-      '|               | Read      | Write     |',
-      '|---            |---        |---        |'
-    )
+  if (networkIORead || networkIOWrite || diskIORead || diskIOWrite) {
+    postContentItems.push('### IO Metrics', '')
   }
-  if (networkIORead && networkIOWrite) {
-    postContentItems.push(
-      `| Network I/O   | ![${networkIORead.id}](${networkIORead.url})        | ![${networkIOWrite.id}](${networkIOWrite.url})        |`
-    )
+  if (networkIORead) {
+    postContentItems.push('#### Network I/O Read', '', networkIORead, '')
   }
-  if (diskIORead && diskIOWrite) {
-    postContentItems.push(
-      `| Disk I/O      | ![${diskIORead.id}](${diskIORead.url})              | ![${diskIOWrite.id}](${diskIOWrite.url})              |`
-    )
+  if (networkIOWrite) {
+    postContentItems.push('#### Network I/O Write', '', networkIOWrite, '')
+  }
+  if (diskIORead) {
+    postContentItems.push('#### Disk I/O Read', '', diskIORead, '')
+  }
+  if (diskIOWrite) {
+    postContentItems.push('#### Disk I/O Write', '', diskIOWrite, '')
   }
   if (diskSizeUsage) {
-    postContentItems.push(
-      '### Disk Size Metrics',
-      `![${diskSizeUsage.id}](${diskSizeUsage.url})`,
-      ''
-    )
+    postContentItems.push('### Disk Size Metrics', '', diskSizeUsage, '')
   }
 
   return postContentItems.join('\n')
@@ -353,89 +302,6 @@ async function getDiskSizeStats(): Promise<ProcessedDiskSizeStats> {
   })
 
   return { diskAvailableX, diskUsedX }
-}
-
-async function getLineGraph(options: LineGraphOptions): Promise<GraphResponse> {
-  const points = options.line.points
-  if (points.length === 0) {
-    return { id: 'empty-line-graph', url: '' }
-  }
-
-  const dimensions = svgGen.getChartDimensions(1000, 500, 40)
-  const dataRange = svgGen.calculateDataRange(points)
-  const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions)
-
-  const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth)
-  const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight)
-
-  const pathData = svgGen.generateLinePath(points, scaleFunctions)
-
-  const chartContent = `
-    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
-    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
-    <path d="${pathData}" fill="none" stroke="${options.line.color}" stroke-width="2"/>
-    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
-    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
-    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`
-
-  const svg = svgGen.createSVGDocument(
-    dimensions,
-    options.label,
-    options.axisColor,
-    chartContent
-  )
-  const dataUrl = svgGen.svgToDataUrl(svg)
-
-  return {
-    id: `line-graph-${options.line.label.replace(/\s/g, '-').toLowerCase()}`,
-    url: dataUrl
-  }
-}
-
-async function getStackedAreaGraph(
-  options: StackedAreaGraphOptions
-): Promise<GraphResponse> {
-  const areas = options.areas
-  if (areas.length === 0 || areas[0].points.length === 0) {
-    return { id: 'empty-stacked-area-graph', url: '' }
-  }
-
-  const dimensions = svgGen.getChartDimensions(1000, 500, 60)
-  const dataRange = svgGen.calculateStackedDataRange(areas)
-  const scaleFunctions = svgGen.createScaleFunctions(dataRange, dimensions)
-
-  const timeTicks = svgGen.generateTimeTicks(dataRange, dimensions.chartWidth)
-  const yTicks = svgGen.generateYAxisTicks(dataRange, dimensions.chartHeight)
-
-  const areaPaths = svgGen.generateStackedAreaPaths(areas, scaleFunctions)
-
-  const legend = svgGen.generateLegend(
-    areas,
-    dimensions.width,
-    options.axisColor
-  )
-
-  const chartContent = `
-    ${svgGen.generateGridLines(yTicks, dimensions.chartWidth)}
-    ${areaPaths.join('\n    ')}
-    ${svgGen.generateAxes(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}
-    ${svgGen.generateXAxisTicksAndLabels(timeTicks, dimensions.chartHeight, options.axisColor)}
-    ${svgGen.generateYAxisTicksAndLabels(yTicks, options.axisColor)}
-    ${svgGen.generateAxisLabels(dimensions.chartWidth, dimensions.chartHeight, options.axisColor)}`
-
-  const svg = svgGen.createSVGDocument(
-    dimensions,
-    options.label,
-    options.axisColor,
-    chartContent,
-    `\n  ${legend}`
-  )
-  const dataUrl = svgGen.svgToDataUrl(svg)
-
-  return {
-    id: `stacked-area-graph-${options.label.replace(/\s/g, '-').toLowerCase()}`,
-    url: dataUrl
-  }
 }
 
 ///////////////////////////
