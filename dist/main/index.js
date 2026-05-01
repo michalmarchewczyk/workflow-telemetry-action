@@ -44490,6 +44490,13 @@ function generateLineChart(title, yAxisLabel, lineLabel, points) {
     const timeLabels = generateTimeLabels(sampledPoints);
     const values = generateValues(sampledPoints);
     return `\`\`\`mermaid
+---
+config:
+  xyChart:
+    width: 1200
+    xAxis:
+      labelFontSize: 10
+---
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -44518,6 +44525,13 @@ function generateStackedChart(title, yAxisLabel, areas) {
     })
         .join('\n');
     return `\`\`\`mermaid
+---
+config:
+  xyChart:
+    width: 1200
+    xAxis:
+      labelFontSize: 10
+---
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -44560,6 +44574,13 @@ function generateCumulativeStackedChart(title, yAxisLabel, areas) {
         .map(data => `    line [${data.values.join(', ')}]`)
         .join('\n');
     return `\`\`\`mermaid
+---
+config:
+  xyChart:
+    width: 1200
+    xAxis:
+      labelFontSize: 10
+---
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]

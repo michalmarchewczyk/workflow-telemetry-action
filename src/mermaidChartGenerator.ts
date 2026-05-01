@@ -67,6 +67,13 @@ export function generateLineChart(
   const values = generateValues(sampledPoints)
 
   return `\`\`\`mermaid
+---
+config:
+  xyChart:
+    width: 1200
+    xAxis:
+      labelFontSize: 10
+---
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -103,6 +110,13 @@ export function generateStackedChart(
     .join('\n')
 
   return `\`\`\`mermaid
+---
+config:
+  xyChart:
+    width: 1200
+    xAxis:
+      labelFontSize: 10
+---
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
@@ -155,6 +169,13 @@ export function generateCumulativeStackedChart(
     .join('\n')
 
   return `\`\`\`mermaid
+---
+config:
+  xyChart:
+    width: 1200
+    xAxis:
+      labelFontSize: 10
+---
 xychart
     title "${title}"
     x-axis [${timeLabels.map(t => `"${t}"`).join(', ')}]
