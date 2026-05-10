@@ -6,9 +6,10 @@ import * as statCollector from './statCollector'
 import * as processTracer from './processTracer'
 import * as logger from './logger'
 import { WorkflowJobType } from './interfaces'
+import { execSync } from 'child_process'
 
 const { pull_request } = github.context.payload
-const { workflow, job, repo, runId, sha } = github.context
+const { workflow, job, repo, runId } = github.context
 const PAGE_SIZE = 100
 const octokit: Octokit = new Octokit()
 
@@ -74,8 +75,9 @@ async function reportAll(
   const title = `## Workflow Telemetry - ${workflow} / ${currentJob.name}`
   logger.debug(`Title: ${title}`)
 
+  const gitSha: string = execSync('git rev-parse HEAD').toString().trim()
   const commit: string =
-    (pull_request && pull_request.head && pull_request.head.sha) || sha
+    (pull_request && pull_request.head && pull_request.head.sha) || gitSha
   logger.debug(`Commit: ${commit}`)
 
   const commitUrl = `https://github.com/${repo.owner}/${repo.repo}/commit/${commit}`

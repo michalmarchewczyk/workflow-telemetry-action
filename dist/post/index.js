@@ -54401,8 +54401,9 @@ const stepTracer = __importStar(__nccwpck_require__(377));
 const statCollector = __importStar(__nccwpck_require__(6451));
 const processTracer = __importStar(__nccwpck_require__(6160));
 const logger = __importStar(__nccwpck_require__(4636));
+const child_process_1 = __nccwpck_require__(2081);
 const { pull_request } = github.context.payload;
-const { workflow, job, repo, runId, sha } = github.context;
+const { workflow, job, repo, runId } = github.context;
 const PAGE_SIZE = 100;
 const octokit = new action_1.Octokit();
 function getCurrentJob() {
@@ -54459,7 +54460,8 @@ function reportAll(currentJob, content) {
         logger.debug(`Job url: ${jobUrl}`);
         const title = `## Workflow Telemetry - ${workflow} / ${currentJob.name}`;
         logger.debug(`Title: ${title}`);
-        const commit = (pull_request && pull_request.head && pull_request.head.sha) || sha;
+        const gitSha = (0, child_process_1.execSync)('git rev-parse HEAD').toString().trim();
+        const commit = (pull_request && pull_request.head && pull_request.head.sha) || gitSha;
         logger.debug(`Commit: ${commit}`);
         const commitUrl = `https://github.com/${repo.owner}/${repo.repo}/commit/${commit}`;
         logger.debug(`Commit url: ${commitUrl}`);
