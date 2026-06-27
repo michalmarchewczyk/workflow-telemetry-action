@@ -49,6 +49,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           ]
         )
       : null
+  logger.info(`Generated CPU Load chart from ${userLoadX.length} points`);
 
   const memoryUsage =
     activeMemoryX &&
@@ -61,6 +62,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           ]
         )
       : null
+  logger.info(`Generated Memory Usage chart from ${activeMemoryX.length} points`);
 
   const networkIORead =
     networkReadX && networkReadX.length
@@ -71,6 +73,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           networkReadX
         )
       : null
+  logger.info(`Generated Network I/O Read chart from ${networkReadX.length} points`);
 
   const networkIOWrite =
     networkWriteX && networkWriteX.length
@@ -81,6 +84,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           networkWriteX
         )
       : null
+  logger.info(`Generated Network I/O Write chart from ${networkWriteX.length} points`);
 
   const diskIORead =
     diskReadX && diskReadX.length
@@ -91,6 +95,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           diskReadX
         )
       : null
+  logger.info(`Generated Disk I/O Read chart from ${diskReadX.length} points`);
 
   const diskIOWrite =
     diskWriteX && diskWriteX.length
@@ -101,6 +106,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           diskWriteX
         )
       : null
+  logger.info(`Generated Disk I/O Write chart from ${diskWriteX.length} points`);
 
   const diskSizeUsage =
     diskUsedX && diskUsedX.length
@@ -112,6 +118,7 @@ async function reportWorkflowMetrics(): Promise<string> {
           ]
         )
       : null
+  logger.info(`Generated Disk Usage chart from ${diskUsedX.length} points`);
 
   const postContentItems: string[] = []
   if (cpuLoad) {

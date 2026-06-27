@@ -40677,7 +40677,7 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 const http_1 = __nccwpck_require__(3685);
 const systeminformation_1 = __importDefault(__nccwpck_require__(9284));
 const logger = __importStar(__nccwpck_require__(4636));
-const STATS_FREQ = parseInt(process.env.WORKFLOW_TELEMETRY_STAT_FREQ || '') || 5000;
+const STATS_FREQ = parseInt(process.env.WORKFLOW_TELEMETRY_STAT_FREQ || '') || 1000;
 const SERVER_HOST = 'localhost';
 // TODO
 // It is better to find an available/free port automatically and use it.

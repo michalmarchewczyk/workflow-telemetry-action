@@ -44452,7 +44452,7 @@ function formatTime(timestamp) {
  * Sample data points to avoid overcrowding the chart
  * Mermaid has limitations on the number of data points
  */
-function sampleDataPoints(points, maxPoints = 20) {
+function sampleDataPoints(points, maxPoints = 100) {
     if (points.length <= maxPoints) {
         return points;
     }
@@ -45107,29 +45107,36 @@ function reportWorkflowMetrics() {
                 { label: 'System Load', points: systemLoadX }
             ])
             : null;
+        logger.info(`Generated CPU Load chart from ${userLoadX.length} points`);
         const memoryUsage = activeMemoryX &&
             activeMemoryX.length
             ? mermaidGen.generateStackedChart('Memory Usage (MB)', 'Memory (MB)', [
                 { label: 'Used', points: activeMemoryX },
             ])
             : null;
+        logger.info(`Generated Memory Usage chart from ${activeMemoryX.length} points`);
         const networkIORead = networkReadX && networkReadX.length
             ? mermaidGen.generateLineChart('Network I/O Read (MB)', 'Read (MB)', 'Read', networkReadX)
             : null;
+        logger.info(`Generated Network I/O Read chart from ${networkReadX.length} points`);
         const networkIOWrite = networkWriteX && networkWriteX.length
             ? mermaidGen.generateLineChart('Network I/O Write (MB)', 'Write (MB)', 'Write', networkWriteX)
             : null;
+        logger.info(`Generated Network I/O Write chart from ${networkWriteX.length} points`);
         const diskIORead = diskReadX && diskReadX.length
             ? mermaidGen.generateLineChart('Disk I/O Read (MB)', 'Read (MB)', 'Read', diskReadX)
             : null;
+        logger.info(`Generated Disk I/O Read chart from ${diskReadX.length} points`);
         const diskIOWrite = diskWriteX && diskWriteX.length
             ? mermaidGen.generateLineChart('Disk I/O Write (MB)', 'Write (MB)', 'Write', diskWriteX)
             : null;
+        logger.info(`Generated Disk I/O Write chart from ${diskWriteX.length} points`);
         const diskSizeUsage = diskUsedX && diskUsedX.length
             ? mermaidGen.generateStackedChart('Disk Usage (MB)', 'Size (MB)', [
                 { label: 'Used', points: diskUsedX },
             ])
             : null;
+        logger.info(`Generated Disk Usage chart from ${diskUsedX.length} points`);
         const postContentItems = [];
         if (cpuLoad) {
             postContentItems.push('### CPU Metrics', '', cpuLoad, '');
