@@ -7,8 +7,8 @@ inputs:
     default: ${{ github.token }}
     required: false
   metric_frequency:
-    description: "Metric collection frequency in seconds. Must be a number. Defaults to '5'."
-    default: "5"
+    description: "Metric collection frequency in seconds. Must be a number. Defaults to '1'."
+    default: "1"
     required: false
   proc_trace_min_duration:
     description: "Puts minimum limit for process execution duration to be traced. Must be a number. Defaults to '-1' which means process duration filtering is not applied."

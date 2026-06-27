@@ -10,7 +10,7 @@ import {
 } from './interfaces'
 
 const STATS_FREQ: number =
-  parseInt(process.env.WORKFLOW_TELEMETRY_STAT_FREQ || '') || 5000
+  parseInt(process.env.WORKFLOW_TELEMETRY_STAT_FREQ || '') || 1000
 const SERVER_HOST: string = 'localhost'
 // TODO
 // It is better to find an available/free port automatically and use it.

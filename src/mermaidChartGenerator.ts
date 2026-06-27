@@ -14,7 +14,7 @@ function formatTime(timestamp: number): string {
  */
 function sampleDataPoints(
   points: ProcessedStats[],
-  maxPoints = 20
+  maxPoints = 100
 ): ProcessedStats[] {
   if (points.length <= maxPoints) {
     return points
